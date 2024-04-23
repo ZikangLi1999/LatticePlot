@@ -5,7 +5,6 @@ Data Structure of Hexagonal Lattice
 @Author: LZK
 @Date: 2023-5-31
 """
-import enum
 import os
 from os import PathLike
 from typing import Any
@@ -17,7 +16,12 @@ from collections import OrderedDict
 
 class HexCell:
 
-    def __init__(self, positon: CubeCoordinate, pitch: float) -> None:
+    def __init__(
+            self,
+            positon: CubeCoordinate,
+            pitch: float,
+            orientation: float = 0.
+        ) -> None:
         """
         Point in hexagonal lattice
 
@@ -29,6 +33,7 @@ class HexCell:
         self._position = positon
         self._pitch = pitch
         self._value = dict()
+        self._orientation = orientation
     
     @property
     def central_point(self) -> tuple:
@@ -45,7 +50,7 @@ class HexCell:
         vertex_half_distance = self._pitch / math.sqrt(3)  # Distance between two farest vertex points
         res = list()
         for k in range(6):
-            angle = (2 * k + 1) * math.pi / 6
+            angle = (2 * k + 1) * math.pi / 6 + self._orientation
             x = central_point[0] + vertex_half_distance * math.cos(angle)
             y = central_point[1] + vertex_half_distance * math.sin(angle)
             res.append((x, y))
@@ -93,6 +98,10 @@ class HexCell:
         return f"HexCell({self._position})"
     
     @property
+    def position(self) -> CubeCoordinate:
+        return self._position
+    
+    @property
     def pitch(self) -> float:
         return self._pitch
     
@@ -104,6 +113,14 @@ class HexCell:
     @property
     def value(self) -> dict:
         return self._value.copy()
+    
+    @property
+    def orientation(self) -> float:
+        return self._orientation
+    
+    @orientation.setter
+    def orientation(self, value):
+        self._orientation = value
     
     def __setitem__(self, key, value):
         self._value[key] = value
@@ -118,8 +135,10 @@ class HexLattice:
         self._ring = ring
         self._pitch = pitch
         self._lattice = list()
+        self._figure = None # Matplotlib.figure, created in HexLattice.plot()
+        self._axes = None
     
-    def genertate_lattice(self) -> list:
+    def generate_lattice(self) -> list:
         for r in range(self._ring):
             start_point = CubeCoordinate(x=+r, y=0, z=-r)
             ring_points = list()
@@ -132,12 +151,16 @@ class HexLattice:
     
     def plot(
             self,
-            key: str = 'position',
-            text_size: float = 8,
-            save_path: PathLike = 'plot/HexLattice.svg',
-            color_map: str = None,
-            offset_factor: float = 0.,
-            max_ring_idx: int = -1,
+            keys           : str      = 'position',               # Plot multiple keys using `keys = 'key1&key2`
+            text_size      : float    = 8,
+            save_path      : PathLike = 'plot/HexLattice.svg',
+            color_map      : str      = None,
+            offset_factor  : float    = 0.,
+            max_ring_idx   : int      = -1,
+            show_wireframe : bool     = True,
+            show_colorbar  : bool     = True,
+            show_axis      : bool     = False,
+            colorbar_format: str      = "{x:.2f}",
             **kwargs
         ):
         if not self._lattice:
@@ -145,21 +168,30 @@ class HexLattice:
         
         try:
             import matplotlib.pyplot as plt
+            plt.rc('font', family='Times New Roman')
         except ImportError:
             raise ImportError("Matplotlib could not be imported.")
         
-        if color_map:
-            try:
-                import numpy as np
-                from matplotlib.patches import Polygon
-                from matplotlib.collections import PatchCollection
-            except ImportError:
-                raise ImportError("Numpy or Matplotlib.[patches,collections] could not be imported.")
-            patches = list()
-            colors = list()
+        # if color_map:
+        try:
+            import numpy as np
+            from matplotlib.patches import Polygon, Circle
+            from matplotlib.collections import PatchCollection
+            from matplotlib.colors import TABLEAU_COLORS
+        except ImportError:
+            raise ImportError("Numpy or Matplotlib.[patches,collections] could not be imported.")
+        patches = list()
+        colors = list()
+        # color = None
+        has_color = False
 
         if max_ring_idx < 0:
             max_ring_idx = self._ring
+
+        if 'linewidth' in kwargs:
+            linewidth = kwargs['linewidth']
+        else:
+            linewidth = 1
 
         if 'figsize' in kwargs:
             figsize = kwargs['figsize']
@@ -169,7 +201,11 @@ class HexLattice:
             dpi = kwargs['dpi']
         else:
             dpi = 400
-        fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+        self._figure, self._axes = plt.subplots(figsize=figsize, dpi=dpi)
+
+        data_fmt : str = 'default'
+        if 'data_fmt' in kwargs:
+            data_fmt = kwargs['data_fmt']
 
         for ring_idx, ring in enumerate(self._lattice):
             if ring_idx >= max_ring_idx: continue
@@ -179,69 +215,177 @@ class HexLattice:
                 text_y = cell.central_point[1]
                 r, k = cell.coordinate
 
-                # The text value to be showed
-                if key == 'position':
-                    text_to_print = "Cell({:d},{:d})".format(r, k)
-                else:
-                    try:
-                        value = self._lattice[r][k][key]
-                    except KeyError:
-                        raise KeyError("self._lattice[{}][{}][{}]".format(r, k, key))
-                    
-                    if type(value) is float:
-                        if abs(value) >= 100.:
-                            text_to_print = "{:.2E}".format(value)
-                        else:
-                            text_to_print = "{:.4f}".format(value)
+                for key in keys.split('&'):
+
+                    # The text value to be showed
+                    if key == 'position':
+                        text_to_print = "Cell({:d},{:d})".format(r, k)
+                        color = None
+                    elif key == 'position-brief':
+                        text_to_print = "({:d},{:d})".format(r, k)
+                        color = None
                     else:
-                        text_to_print = str(round(value, 2))
+                        try:
+                            cell_info   = self._lattice[r][k][key]
+                            value       = cell_info['value']
+                            cell_shape  = cell_info['shape']
+                            cell_radius = cell_info['radius']
+                            offset      = cell_info['offset']
+                            zorder      = cell_info['zorder']
+                            color       = cell_info['color']
+                            orientation = cell_info['orientation']
+                        except KeyError:
+                            print("Key not found: self._lattice[{}][{}][{}]".format(r, k, key))
+                            continue
+                            # raise KeyError("self._lattice[{}][{}][{}]".format(r, k, key))
+                        
+                        if value is None:
+                            text_to_print = ''
+                        elif isinstance(value, float):
+                            if data_fmt == '%':
+                                text_to_print = "{:.2%}".format(value)
+                            elif data_fmt in ('F', 'f'):
+                                text_to_print = "{:.2f}".format(value)
+                            elif data_fmt in ('E', 'e'):
+                                text_to_print = "{:.2E}".format(value)
+                            else:
+                                if abs(value) >= 100. or (abs(value) <= 1E-2 and abs(value) > 1E-15):
+                                    text_to_print = "{:.2E}".format(value)
+                                else:
+                                    text_to_print = "{:.2f}".format(value)
+                        elif not isinstance(value, str):
+                            text_to_print = str(round(value, 2))
+                        else:
+                            text_to_print = value
 
-                surround_points = cell.surround_points
-                start_point = surround_points[-1]
+                    surround_points = cell.surround_points
+                    start_point = surround_points[-1]
 
-                # Prepare the fillment of hexagon
-                if color_map:
-                    xy = np.vstack(surround_points)
-                    hexagon = Polygon(xy=xy, closed=True)
-                    patches.append(hexagon)
-                    colors.append(value)
-                
-                # Plot the wireframe of hexagon
-                for point in surround_points:
-                    # plt.scatter(point[0], point[1], c='k')
-                    plt.plot(*list(zip(start_point, point)), c='k', zorder=2)
-                    start_point = point
-                
-                # Cell value
-                plt.text(
-                    x = text_x,
-                    y = text_y,
-                    s = text_to_print,
-                    fontdict = {
-                        'family': 'Times New Roman',
-                        'size': text_size
-                    },
-                    horizontalalignment = 'center',
-                    verticalalignment = 'center',
-                    zorder = 3
-                )
+                    # Prepare the fillment of cell
+                    if color_map or color:
+                        if cell_shape == 'hex':
+                            if not cell_radius:
+                                xy = np.vstack(surround_points)
+                            else:
+                                hex_cell = HexCell(
+                                    positon = cell.position,
+                                    pitch = cell_radius,
+                                    orientation = orientation
+                                )
+                                xy = np.vstack(
+                                    hex_cell.surround_points
+                                )
+                            if color is None:
+                                hexagon = Polygon(xy=xy, closed=True, zorder=zorder)
+                                patches.append(hexagon)
+                                if value is None:
+                                    colors.append(0.0)
+                                else:
+                                    colors.append(value)
+                            else:
+                                has_color = True
+                                if not color.startswith('#'):
+                                    color = TABLEAU_COLORS[f'tab:{color}']
+                                hexagon = Polygon(xy=xy, closed=True, zorder=zorder, color=color)
+                                # print(color, hexagon, hexagon.get_visible())
+                                patches.append(hexagon)
+                                colors.append(color)
+                        elif cell_shape == 'circ':
+                            central_point = cell.central_point[:2]
+                            circle_center = np.array(central_point) + np.array(offset)
+                            if color is None:
+                                circle = Circle(xy=circle_center, radius=cell_radius, zorder=zorder)
+                                patches.append(circle)
+                                if value is None:
+                                    colors.append(0.0)
+                                else:
+                                    colors.append(value)
+                            else:
+                                if not color.startswith('#'):
+                                    color = TABLEAU_COLORS[f'tab:{color}']
+                                circle = Circle(xy=circle_center, radius=cell_radius, zorder=zorder, color=color)
+                                patches.append(circle)
+                                colors.append(color)
+                    
+                    # Plot the wireframe of hexagon
+                    if show_wireframe:
+                        for point in surround_points:
+                            # plt.scatter(point[0], point[1], c='k')
+                            plt.plot(
+                                *list(zip(start_point, point)),
+                                c = 'k',
+                                zorder = 2,
+                                linewidth = linewidth
+                            )
+                            start_point = point
+                    # else:
+                    #     core_radius = max_ring_idx * self._pitch
+                    #     plt.xlim([-core_radius, +core_radius])
+                    #     plt.ylim([-core_radius, +core_radius])
+                    
+                    # Cell value
+                    plt.text(
+                        x = text_x,
+                        y = text_y,
+                        s = text_to_print,
+                        fontdict = {
+                            'family': 'Times New Roman',
+                            'size': text_size,
+                            # 'fontweight': 'bold'
+                        },
+                        horizontalalignment = 'center',
+                        verticalalignment = 'center',
+                        zorder = 3
+                    )
         
+        if 'clim' in kwargs:
+            cmin, cmax = kwargs['clim']
+            colors.append(cmin)
+            colors.append(cmax)
+
         # Plot all the hexagons
         if color_map:
-            p = PatchCollection(patches=patches, alpha=0.7)
-            p.set_array(np.array(colors))
-            p.set_cmap(color_map)
-            ax.add_collection(p)
-            fig.colorbar(p, ax=ax)
+            if not has_color:
+                p = PatchCollection(patches=patches, alpha=0.7)
+                p.set_array(np.array(colors))
+                p.set_cmap(color_map)
+            else:
+                p = PatchCollection(patches=patches)             # Solid color if given color
+                p.set_color(colors)
+            self._axes.add_collection(p)
+            if show_colorbar:
+                plt.rc('font', size=16)
+                self._figure.colorbar(
+                    p,
+                    ax=self._axes,
+                    format=colorbar_format
+                )
         
-        # plt.show()
-        if not os.path.exists(save_path):
-            save_path = os.path.join(os.getcwd(), save_path)
-        dir_path = os.path.dirname(save_path)
-        if not os.path.exists(dir_path):
-            os.mkdir(dir_path)
+        if not show_wireframe:
+            core_radius = max_ring_idx * self._pitch
+            plt.xlim([-core_radius, +core_radius])
+            plt.ylim([-core_radius, +core_radius])
         
-        plt.savefig(save_path)
+        if 'xlim' in kwargs:
+            plt.xlim(kwargs['xlim'])
+        if 'ylim' in kwargs:
+            plt.ylim(kwargs['ylim'])
+        
+        if not show_axis:
+            plt.axis('off')
+
+        if save_path is None:
+            plt.show()
+        elif save_path == '--supress':
+            pass
+        else:
+            if not os.path.exists(save_path):
+                save_path = os.path.join(os.getcwd(), save_path)
+            dir_path = os.path.dirname(save_path)
+            if not os.path.exists(dir_path):
+                os.mkdir(dir_path)
+            
+            plt.savefig(save_path)
 
     # def append_data_by_row(self, key: str, value: Any):
     #     """
@@ -342,6 +486,12 @@ class HexLattice:
     def lattice(self) -> list:
         return self._lattice
 
+    def get_matplotlib_figure(self):
+        return self._figure
+    
+    def get_matplotlib_axes(self):
+        return self._axes
+
 
 
 class RowAppender:
@@ -351,15 +501,46 @@ class RowAppender:
         self._lattice = lattice
         self._axial_to_ring = tuple(lattice.generate_ring_axial_hash()[1].items())
     
-    def append(self, key: str, value: Any) -> None:
-        if key not in self._idx:
-            self._idx[key] = 0
-        
-        aixal_coor, ring_coor = self._axial_to_ring[self._idx[key]]
-        r, k = ring_coor
-        self._lattice.lattice[r][k][key] = value
+    def append(
+            self,
+            key          : str,
+            value        : Any                 = None,
+            cell_shape   : str                 = 'hex',     # 'hex': hexagonal, 'circ': circular
+            cell_radius  : float               = 0.,        # The radius of circle if cell_shape = 'circ'
+            offset       : tuple[float, float] = (0, 0),    # Offset from the cell center
+            zorder       : int                 = 1,         # Plot layor priority, same as matplotlib
+            color        : str                 = None,
+            orientation  : float               = 0.
+        ) -> None:        
+        current_cell = self.get_current_cell(key=key)
+        current_cell[key] = {
+            'value'      : value,
+            'shape'      : cell_shape,
+            'radius'     : cell_radius,
+            'offset'     : offset,
+            'zorder'     : zorder,
+            'color'      : color,
+            'orientation': orientation
+        }
         self._idx[key] += 1
+
+        # if orientation:
+        #     self._lattice.lattice[r][k].orientation = orientation
     
     @property
     def cell_num(self) -> int:
         return len(self._axial_to_ring)
+
+    def get_current_cell(self, key) -> HexCell:
+        # Count total number for every single key
+        if key not in self._idx:
+            self._idx[key] = 0
+        try:
+            aixal_coor, ring_coor = self._axial_to_ring[self._idx[key]]
+        except IndexError:
+            raise IndexError("Index {} out of range {}".format(
+                self._idx[key], len(self._axial_to_ring)
+            ))
+        
+        r, k = ring_coor
+        return self._lattice.lattice[r][k]
