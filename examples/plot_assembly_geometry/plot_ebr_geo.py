@@ -5,7 +5,8 @@ Plot the geomery of assembly in EBR-II
 """
 import os
 import sys
-package_path = os.path.dirname(os.getcwd())
+package_path = os.getcwd()
+print(package_path)
 sys.path.append(package_path)
 
 import numpy as np
@@ -94,7 +95,7 @@ def plot_driver():
 
     lattice.plot(
         keys = 'tube&coolant&clad&gap&fuel&wire',
-        save_path = 'plot/EBR-II/geo_driver.png',
+        save_path = 'gallery/geo_driver.svg',
         color_map = 'jet',
         show_wireframe = False,
         show_axis = False,
@@ -171,7 +172,7 @@ def plot_half_worth_driver():
 
     lattice.plot(
         keys = 'tube&coolant&clad&gap&fuel&wire',
-        save_path = 'plot/EBR-II/geo_half_worth_driver.png',
+        save_path = 'gallery/geo_half_worth_driver.svg',
         color_map = 'jet',
         show_wireframe = False,
         show_axis = False,
@@ -256,7 +257,7 @@ def plot_control():
 
     lattice.plot(
         keys = 'blank&tube&coolant&tube-inner&coolant-inner&clad&gap&fuel&wire',
-        save_path = 'plot/EBR-II/geo_control.png',
+        save_path = 'gallery/geo_control.svg',
         color_map = 'jet',
         show_wireframe = False,
         show_axis = False,
@@ -344,7 +345,7 @@ def plot_poison():
 
     lattice.plot(
         keys = 'tube&coolant&tube-inner&coolant-inner&clad&gap&fuel&wire',
-        save_path = 'plot/EBR-II/geo_poison.png',
+        save_path = 'gallery/geo_poison.svg',
         color_map = 'jet',
         show_wireframe = False,
         show_axis = False,
@@ -421,7 +422,7 @@ def plot_1D_eq():
 
     lattice.plot(
         keys = 'tube&coolant&tube-inner&coolant-inner&clad&gap&fuel&wire',
-        save_path = 'plot/EBR-II/geo_poison.png',
+        save_path = 'gallery/geo_poison.svg',
         color_map = 'jet',
         show_wireframe = False,
         show_axis = False,

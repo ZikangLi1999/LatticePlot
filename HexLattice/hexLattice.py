@@ -279,7 +279,7 @@ class HexLattice:
                                 hexagon = Polygon(xy=xy, closed=True, zorder=zorder)
                                 patches.append(hexagon)
                                 if value is None:
-                                    colors.append(0.0)
+                                    colors.append([0., 0., 0., 0.])
                                 else:
                                     colors.append(value)
                             else:
@@ -297,7 +297,7 @@ class HexLattice:
                                 circle = Circle(xy=circle_center, radius=cell_radius, zorder=zorder)
                                 patches.append(circle)
                                 if value is None:
-                                    colors.append(0.0)
+                                    colors.append([0., 0., 0., 0.])
                                 else:
                                     colors.append(value)
                             else:
@@ -385,7 +385,7 @@ class HexLattice:
             if not os.path.exists(dir_path):
                 os.mkdir(dir_path)
             
-            plt.savefig(save_path)
+            plt.savefig(save_path, transparent=True)
 
     # def append_data_by_row(self, key: str, value: Any):
     #     """

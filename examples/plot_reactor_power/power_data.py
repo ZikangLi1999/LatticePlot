@@ -21,7 +21,7 @@ def normalize(data: Union[list[float], np.ndarray]) -> list[float]:
     return data
 
 
-file = os.path.join(os.getcwd(), 'reactor_result.xlsx')
+file = os.path.join(os.getcwd(), 'examples', 'plot_reactor_power', 'reactor_result.xlsx')
 
 # Reference power
 power : pd.DataFrame = pd.read_excel(file, sheet_name='power', dtype=float)

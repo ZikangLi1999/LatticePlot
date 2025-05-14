@@ -43,7 +43,7 @@ for i in range(1 + MAX_ANISO_ORDER):
     print(f"Maximum relative error of P{i} is {max_relerr[i]}")
 
 
-plot_directory = os.path.join(os.getcwd(), 'plot')
+plot_directory = os.path.join(os.getcwd(), 'gallery')
 if not os.path.exists(plot_directory):
     os.mkdir(plot_directory)
 
@@ -89,7 +89,7 @@ print(f"Plotting core configuration ...")
 lattice.plot(
     keys = f'core_config',
     color_map = 'jet',
-    save_path = os.path.join(plot_directory, f'plot/core_config.png'),
+    save_path = os.path.join(plot_directory, f'core_config.png'),
     figsize = (11, 8),
     text_size = 8,
     dpi = 600
